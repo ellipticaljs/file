@@ -1,7 +1,7 @@
 {
   "name": "elliptical-file",
   "description": "Blob file service abstraction layer",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "author": "S. Francis",
   "license": "MIT",
   "repository": {

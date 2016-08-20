@@ -490,7 +490,7 @@
       exports: {}
     };
     factory(mod.exports, global.elliptical.Service);
-    global.elliptical.FileService = mod.exports.default;
+    global.elliptical.FileService = mod.exports;
   }
 })(this, function (exports, _ellipticalService) {
   'use strict';
