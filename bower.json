@@ -1,7 +1,7 @@
 {
   "name": "elliptical-file",
   "description": "Blob file service abstraction layer",
-  "version":"1.0.0",
+  "version":"1.0.1",
   "main": "",
   "authors": [
     "S. Francis"
@@ -42,6 +42,6 @@
   "dependencies": {
     "elliptical-service": "~1.0.4",
     "elliptical-repository-provider": "~1.1.1",
-    "elliptical-rest-provider": "~1.0.0",
+    "elliptical-rest-provider": "~1.0.0"
   }
 }
