@@ -1,0 +1,5 @@
+[
+  "./lib/fileLocalProvider.js",
+  "./lib/fileRestProvider.js",
+  "./lib/fileService.js"
+]

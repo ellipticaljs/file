@@ -1,0 +1,47 @@
+{
+  "name": "elliptical-file",
+  "description": "Blob file service abstraction layer",
+  "version":"1.0.0",
+  "main": "",
+  "authors": [
+    "S. Francis"
+  ],
+  "license": "MIT",
+  "keywords": [
+    "web",
+    "components"
+  ],
+  "moduleType": [],
+  "homepage": "https://github.com/ellipticaljs/elliptical-file",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests",
+    ".gitignore",
+    ".npmignore",
+    "gulpfile.js",
+    "lib",
+    "docs",
+    "index.js",
+    "umd.js",
+    "package.json",
+    "demo",
+    "build.json",
+    "bundle.json",
+    ".nvmrc",
+    ".eslintrc",
+    "bin",
+    "CHANGELOG.md",
+    "demos",
+    "stylesheets",
+    "_index.scss",
+    "bk"
+  ],
+  "dependencies": {
+    "elliptical-service": "~1.0.4",
+    "elliptical-repository-provider": "~1.1.1",
+    "elliptical-rest-provider": "~1.0.0",
+  }
+}
