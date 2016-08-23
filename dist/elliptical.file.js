@@ -50,9 +50,10 @@
   }();
 
   var FileLocalProvider = function () {
-    function FileLocalProvider() {
+    function FileLocalProvider(dbName) {
       _classCallCheck(this, FileLocalProvider);
 
+      this._dbName = dbName ? dbName : 'EllipticalLocalFileStore';
       this._db = null;
       this._initDb();
       this._repo = new _ellipticalGenericRepository2.default([]);
@@ -64,7 +65,7 @@
       value: function _initDb() {
         var self = this;
         var db;
-        var request = window.indexedDB.open("EllipticalLocalFileStore", 1);
+        var request = window.indexedDB.open(this._dbName, 1);
         request.onerror = function (event) {
           console.warn('Error opening database');
         };
@@ -93,7 +94,7 @@
             if (callback) callback(null, request.result);
           };
           request.onerror = function (event) {
-            if (callback) callback({ statusCode: request.errorCode }, null);
+            if (callback) callback({ statusCode: 500, message: request.error.message }, params);
           };
         } else {
           var result = [];
@@ -116,18 +117,18 @@
       value: function post(params, resource, callback) {
         var self = this;
         var reader = new FileReader();
-        var transaction = this._db.transaction(["objFiles"], "readwrite");
-        var objectStore = transaction.objectStore("objFiles");
         var blob = params.blob;
         reader.readAsDataURL(blob);
         reader.onload = function (evt) {
+          var transaction = self._db.transaction(["objFiles"], "readwrite");
+          var objectStore = transaction.objectStore("objFiles");
           params.dataUrl = evt.target.result;
           var request = objectStore.add(params);
           request.onsuccess = function (event) {
             self._simulateProgress(params, callback);
           };
           request.onerror = function (event) {
-            if (callback) callback({ statusCode: request.errorCode }, null);
+            if (callback) callback({ statusCode: 500, message: request.error.message }, params);
           };
         };
       }
@@ -146,8 +147,13 @@
           if (callback) callback(null, null);
         };
         request.onerror = function (event) {
-          if (callback) callback({ statusCode: request.errorCode }, null);
+          if (callback) callback({ statusCode: 500, message: request.error.message }, null);
         };
+      }
+    }, {
+      key: 'abort',
+      value: function abort() {
+        console.warn('Warning: abort file upload not implemented for local database provider');
       }
     }, {
       key: 'query',
@@ -170,24 +176,27 @@
       value: function _simulateProgress(params, callback) {
         var MAX_COUNT = 4;
         var progressCb = this._progressCallback;
-        var size = params.parseInt(params.size);
+        var total = params.total;
         var i = 1;
+        var fltSize = parseFloat(total / 1000).toFixed(2);
         var e = {
-          total: size,
-          size: size,
+          total: total,
+          size: fltSize.toString() + ' KB',
           loaded: null,
-          percentage: null,
+          progress: null,
           id: params.id,
           lengthComputable: true
         };
-        setTimeout(function () {
-          var loaded = Math.round(size * (i / MAX_COUNT));
-          var percentage = Math.round(loaded * 100 / e.total);
+        var intervalId = setInterval(function () {
+          var loaded = Math.round(total * (i / MAX_COUNT));
+          var progress = Math.round(loaded * 100 / e.total);
           e.loaded = loaded;
-          e.percentage = percentage;
+          e.progress = progress;
+          e.completed = i === MAX_COUNT;
           if (progressCb) progressCb(e);
           if (i === MAX_COUNT) {
-            if (callback) callback(params);
+            clearInterval(intervalId);
+            if (callback) callback(null, params);
           } else i += 1;
         }, 500);
       }
@@ -314,6 +323,12 @@
         this._progressCallback = fn;
       }
     }, {
+      key: 'abort',
+      value: function abort() {
+        var xhr = this._xhr;
+        xhr.abort();
+      }
+    }, {
       key: '_entityUpload',
       value: function _entityUpload(params, url) {
         var xhr = this._xhr;
@@ -347,17 +362,20 @@
       value: function _onFileProgress(event) {
         if (!this._progressCallback) return;
         var id = this._entity.id;
+        var total = event.size;
+        var fltSize = parseFloat(total / 1000).toFixed(2);
         if (event.lengthComputable) {
           var e = {
-            size: event.total,
-            total: event.total,
+            size: fltSize.toString() + ' KB',
+            total: total,
             loaded: event.loaded,
-            percentage: null,
+            progress: null,
             id: id,
-            lengthComputable: true
+            lengthComputable: true,
+            completed: false
           };
-
-          e.percentage = Math.round(e.loaded * 100 / e.total);
+          e.completed = e.loaded === e.total;
+          e.progress = Math.round(e.loaded * 100 / e.total);
           this._progressCallback(e);
         } else this._progressCallback(event);
       }
@@ -366,19 +384,24 @@
       value: function _onFileComplete(event) {
         this._removeFileListeners();
         var entity = this._entity;
+        entity.complete = true;
+        entity.error = false;
         var callback = this._postCallback;
         if (callback) callback(null, entity);
       }
     }, {
       key: '_onFileError',
       value: function _onFileError(event) {
+        var entity = this._entity;
         this._removeFileListeners();
         var callback = this._postCallback;
+        entity.error = true;
+        entity.complete = false;
         var err = {
           statusCode: 500,
           message: 'Error uploading file'
         };
-        if (callback) callback(err, null);
+        if (callback) callback(err, entity);
       }
     }, {
       key: '_removeFileListeners',
@@ -395,40 +418,44 @@
         if (!progressCb) return;
         var MAX_COUNT = 90;
         var id = this._entity.id;
-        var e;
+        var e, total, fltSize;
         if (event.lengthComputable) {
+          total = event.total;
+          fltSize = parseFloat(total / 1000).toFixed(2);
           e = {
-            size: event.total,
-            total: event.total,
+            size: fltSize.toString() + ' KB',
+            total: total,
             loaded: event.loaded,
-            percentage: null,
+            progress: null,
             id: id,
-            lengthComputable: true
+            lengthComputable: true,
+            completed: false
           };
-
-          e.percentage = Math.round(e.loaded * 100 / e.total);
+          e.progress = Math.round(e.loaded * 100 / e.total);
           progressCb(e);
         } else {
           var iteration = this._iteration;
           this._lengthComputable = false;
           var entity = this._entity;
-          var size = entity.size;
+          total = entity.total;
+          fltSize = parseFloat(total / 1000).toFixed(2);
           e = {
-            size: entity.size,
-            total: entity.size,
+            size: fltSize.toString() + ' KB',
+            total: total,
             loaded: null,
-            percentage: null,
+            progress: null,
             id: id,
-            lengthComputable: true
+            lengthComputable: true,
+            completed: false
           };
           if (iteration < MAX_COUNT - 2) {
             iteration += 1;
             this._iteration = iteration;
           }
           var loaded = Math.round(size * (iteration / MAX_COUNT));
-          var percentage = Math.round(loaded * 100 / e.total);
+          var progress = Math.round(loaded * 100 / e.total);
           e.loaded = loaded;
-          e.percentage = percentage;
+          e.progress = progress;
           progressCb(e);
         }
       }
@@ -444,13 +471,16 @@
     }, {
       key: '_onEntityError',
       value: function _onEntityError(event) {
+        var entity = this._entity;
+        entity.error = true;
+        entity.complete = false;
         this._removeEntityListeners();
         var callback = this._postCallback;
         var err = {
           statusCode: 500,
           message: 'Error uploading file entity'
         };
-        if (callback) callback(err, null);
+        if (callback) callback(err, entity);
       }
     }, {
       key: '_removeEntityListeners',
@@ -463,15 +493,24 @@
     }, {
       key: '_fireEntityLoadComplete',
       value: function _fireEntityLoadComplete() {
+        var progressCb = this._progressCallback;
+        if (!progressCb) return;
         var entity = this._entity;
+        var total = entity.total;
+        var fltSize = parseFloat(total / 1000).toFixed(2);
+
         var e = {
-          size: entity.size,
-          total: entity.size,
-          loaded: entity.size,
-          percentage: 100,
+          size: fltSize.toString() + ' KB',
+          total: total,
+          loaded: total,
+          progress: 100,
+          completed: true,
+          error: false,
           id: entity.id,
           lengthComputable: true
         };
+
+        progressCb(e);
       }
     }]);
 
@@ -490,7 +529,7 @@
       exports: {}
     };
     factory(mod.exports, global.elliptical.Service);
-    global.elliptical.FileService = mod.exports;
+    global.elliptical.FileService = mod.exports.default;
   }
 })(this, function (exports, _ellipticalService) {
   'use strict';
@@ -607,6 +646,11 @@
       key: 'onProgress',
       value: function onProgress(fn) {
         this.constructor.onProgress(fn);
+      }
+    }, {
+      key: 'abort',
+      value: function abort() {
+        this.$provider.abort();
       }
     }], [{
       key: 'post',
