@@ -99,16 +99,17 @@
         } else {
           var result = [];
           var direction;
-          if (query && bquery.orderByDesc) direction = 'prev';else direction = 'next';
+          if (query && query.orderByDesc) direction = 'prev';else direction = 'next';
 
           objectStore.openCursor(null, direction).onsuccess = function (event) {
             var cursor = event.target.result;
             if (cursor) {
               result.push(cursor.value);
               cursor.continue();
+            }else{
+              if (query && query.filter && query.filter !== undefined) result = self.query(result, query.filter);
+              if (callback) callback(null, result);
             }
-            if (query && query.filter && query.filter !== undefined) result = self.query(result, query.filter);
-            if (callback) callback(null, result);
           };
         }
       }
