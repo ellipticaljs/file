@@ -106,7 +106,7 @@
             if (cursor) {
               result.push(cursor.value);
               cursor.continue();
-            }else{
+            } else {
               if (query && query.filter && query.filter !== undefined) result = self.query(result, query.filter);
               if (callback) callback(null, result);
             }
@@ -115,7 +115,11 @@
       }
     }, {
       key: 'post',
-      value: function post(params, resource, callback) {
+      value: function post(params, resource, progressCb, callback) {
+        if (!callback) {
+          callback = progressCb;
+          progressCb = null;
+        }
         var self = this;
         var reader = new FileReader();
         var blob = params.blob;
@@ -126,7 +130,7 @@
           params.dataUrl = evt.target.result;
           var request = objectStore.add(params);
           request.onsuccess = function (event) {
-            self._simulateProgress(params, callback);
+            self._simulateProgress(params, callback, progressCb);
           };
           request.onerror = function (event) {
             if (callback) callback({ statusCode: 500, message: request.error.message }, params);
@@ -141,7 +145,7 @@
     }, {
       key: 'delete',
       value: function _delete(params, resource, callback) {
-        var transaction = this._db.transaction(["objFiles"]);
+        var transaction = this._db.transaction(["objFiles"],"readwrite");
         var objectStore = transaction.objectStore("objFiles");
         var request = objectStore.delete(params.id);
         request.onsuccess = function (event) {
@@ -162,21 +166,15 @@
         var keys = Object.keys(filter);
         filter = filter[keys[0]];
         filter = filter.toLowerCase();
-        var result = this.enumerable(data).Where(function (x) {
+        var result = this._repo.Enumerable(data).Where(function (x) {
           return x.id.toLowerCase().indexOf(filter) == 0;
         });
         return result.ToArray();
       }
     }, {
-      key: 'onProgress',
-      value: function onProgress(fn) {
-        this._progressCallback = fn;
-      }
-    }, {
       key: '_simulateProgress',
-      value: function _simulateProgress(params, callback) {
+      value: function _simulateProgress(params, callback, progressCb) {
         var MAX_COUNT = 4;
-        var progressCb = this._progressCallback;
         var total = params.total;
         var i = 1;
         var fltSize = parseFloat(total / 1000).toFixed(2);
@@ -304,11 +302,16 @@
 
     _createClass(FileRestProvider, [{
       key: 'post',
-      value: function post(params, resource, callback) {
+      value: function post(params, resource, progressCb, callback) {
+        if (!callback) {
+          callback = progressCb;
+          progressCb = null;
+        }
         this._lengthComputable = true;
         this._iteration = 0;
         this._entity = params;
         this._postCallback = callback;
+        this._progressCallback = progressCb;
         var url = this.baseEndpoint + '/' + resource;
         this._xhr = new XMLHttpRequest();
         if (this.useEntity) this._entityUpload(params, url);else this._fileUpload(params, url);
@@ -317,11 +320,6 @@
       key: 'put',
       value: function put(params, resource, callback) {
         if (callback) callback({ statusCode: 501, message: 'Put not implemented' });
-      }
-    }, {
-      key: 'onProgress',
-      value: function onProgress(fn) {
-        this._progressCallback = fn;
       }
     }, {
       key: 'abort',
@@ -387,7 +385,9 @@
         var entity = this._entity;
         entity.complete = true;
         entity.error = false;
+        this._progressCallback = null;
         var callback = this._postCallback;
+        this._postCallback = null;
         if (callback) callback(null, entity);
       }
     }, {
@@ -467,6 +467,8 @@
         var entity = this._entity;
         if (!this._lengthComputable) this._fireEntityLoadComplete();
         var callback = this._postCallback;
+        this._postCallback = null;
+        this._progressCallback = null;
         if (callback) callback(null, entity);
       }
     }, {
@@ -481,6 +483,7 @@
           statusCode: 500,
           message: 'Error uploading file entity'
         };
+        this._postCallback = null;
         if (callback) callback(err, entity);
       }
     }, {
@@ -496,6 +499,7 @@
       value: function _fireEntityLoadComplete() {
         var progressCb = this._progressCallback;
         if (!progressCb) return;
+        this._progressCallback = null;
         var entity = this._entity;
         var total = entity.total;
         var fltSize = parseFloat(total / 1000).toFixed(2);
@@ -636,48 +640,30 @@
     _createClass(FileService, [{
       key: 'post',
       value: function post(params, callback) {
-        this.constructor.post(params, callback);
-      }
-    }, {
-      key: 'postAsync',
-      value: function postAsync(params) {
-        return this.constructor.postAsync(params);
-      }
-    }, {
-      key: 'onProgress',
-      value: function onProgress(fn) {
-        this.constructor.onProgress(fn);
-      }
-    }, {
-      key: 'abort',
-      value: function abort() {
-        this.$provider.abort();
-      }
-    }], [{
-      key: 'post',
-      value: function post(params, callback) {
-        var $provider = this.$provider,
+        var progressCb = this._progressCb;
+        var $provider = this.constructor.$provider,
             resource = this['@resource'];
-        $provider.post(params, resource, callback);
+        $provider.post(params, resource, progressCb, callback);
       }
     }, {
       key: 'postAsync',
       value: function () {
         var _ref = _asyncToGenerator(regeneratorRuntime.mark(function _callee(params) {
-          var $provider, resource;
+          var progressCb, $provider, resource;
           return regeneratorRuntime.wrap(function _callee$(_context) {
             while (1) {
               switch (_context.prev = _context.next) {
                 case 0:
-                  $provider = this.$provider;
+                  progressCb = this._progressCb;
+                  $provider = this.constructor.$provider;
                   resource = this['@resource'];
                   return _context.abrupt('return', new Promise(function (resolve, reject) {
-                    $provider.post(params, resource, function (err, data) {
+                    $provider.post(params, resource, progressCb, function (err, data) {
                       if (err) reject(err);else resolve(data);
                     });
                   }));
 
-                case 3:
+                case 4:
                 case 'end':
                   return _context.stop();
               }
@@ -694,11 +680,12 @@
     }, {
       key: 'onProgress',
       value: function onProgress(fn) {
-        var context = this;
-        var $provider = this.$provider;
-        $provider.onProgress(function (e) {
-          if (fn) fn.call(context, e);
-        });
+        this._progressCb = fn;
+      }
+    }, {
+      key: 'abort',
+      value: function abort() {
+        this.$provider.abort();
       }
     }]);
 
