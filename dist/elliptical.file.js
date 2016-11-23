@@ -108,7 +108,7 @@
               cursor.continue();
             } else {
               if (query && query.filter && query.filter !== undefined) result = self.query(result, query.filter);
-              if(query && query.paginate) result=self._repo.paginate(result,query.paginate);
+              if (query && query.paginate) result = self._repo.paginate(result, query.paginate);
               if (callback) callback(null, result);
             }
           };
@@ -146,7 +146,7 @@
     }, {
       key: 'delete',
       value: function _delete(params, resource, callback) {
-        var transaction = this._db.transaction(["objFiles"],"readwrite");
+        var transaction = this._db.transaction(["objFiles"], "readwrite");
         var objectStore = transaction.objectStore("objFiles");
         var request = objectStore.delete(params.id);
         request.onsuccess = function (event) {
@@ -552,6 +552,12 @@
     };
   }
 
+  var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) {
+    return typeof obj;
+  } : function (obj) {
+    return obj && typeof Symbol === "function" && obj.constructor === Symbol ? "symbol" : typeof obj;
+  };
+
   function _asyncToGenerator(fn) {
     return function () {
       var gen = fn.apply(this, arguments);
@@ -687,6 +693,20 @@
       key: 'abort',
       value: function abort() {
         this.$provider.abort();
+      }
+    }], [{
+      key: '_toQueryable',
+      value: function _toQueryable(obj) {
+        if ((typeof obj === 'undefined' ? 'undefined' : _typeof(obj)) !== 'object') return obj;
+        var qry = {};
+        for (var key in obj) {
+          if (obj.hasOwnProperty(key)) {
+            if (key.indexOf('$') !== 0) {
+              if (key.indexOf('id') === 0) qry['sw_Id'] = obj[key];else qry[key] = obj[key];
+            }
+          }
+        }
+        return qry;
       }
     }]);
 
